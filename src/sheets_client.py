@@ -161,6 +161,31 @@ class GoogleSheetsClient:
             print(f"Error reading business rules: {e}")
             return {}
     
+    def get_product_costs(self) -> Dict[str, float]:
+        """Read product costs from Google Sheets."""
+        if not self.spreadsheet:
+            return {}
+        
+        try:
+            worksheet = self.spreadsheet.worksheet('Product Costs')
+            records = worksheet.get_all_records()
+            
+            costs = {}
+            for record in records:
+                sku = record.get('SKU')
+                if sku:
+                    unit_cost = record.get('Unit Cost', 0)
+                    try:
+                        costs[sku] = float(unit_cost)
+                    except (ValueError, TypeError):
+                        costs[sku] = 0.0
+            
+            return costs
+            
+        except Exception as e:
+            print(f"Error reading product costs: {e}")
+            return {}
+    
     def create_sample_sheets(self):
         """Create sample sheets with headers if they don't exist."""
         if not self.spreadsheet:
@@ -196,6 +221,16 @@ class GoogleSheetsClient:
                     'Component SKU', 'Minimum Buffer Stock', 'Maximum Kit Assembly Quantity',
                     'Lead Time for Component Restocking (days)', 'Assembly/Disassembly Labor Time (minutes)',
                     'Priority Level (High/Medium/Low)'
+                ])
+            
+            # Product Costs sheet
+            try:
+                product_costs = self.spreadsheet.worksheet('Product Costs')
+            except:
+                product_costs = self.spreadsheet.add_worksheet('Product Costs', 1000, 10)
+                product_costs.append_row([
+                    'SKU', 'Unit Cost', 'Cost Currency', 'Last Updated', 
+                    'Supplier', 'Notes'
                 ])
             
             return True

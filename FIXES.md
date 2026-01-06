@@ -5,9 +5,28 @@ This document tracks known issues, bugs, and planned improvements for the invent
 ## Current Issues
 
 ### 🔴 Critical Issues
-- [ ] **Issue #001**: Add sales velocity (units sold last 30 days) for each product to be able to calculate Days of Stock left and minimum buffer for all products.
-
 - [ ] **Issue #006**: Add all products lead times in our GoogleSheet to use with Sales Velocity to calculate next reorder date based on minimum buffer and lead times
+
+- [ ] **Issue #007**: Modify Shopify data structure for "regalos en compra" (gifts with purchase)
+  - **Description**: Currently "regalos en compra" appear as duplicate SKUs in sales data, skewing velocity calculations
+  - **Impact**: Inaccurate sales velocity and days of stock calculations due to duplicate counting
+  - **Solution**: External Shopify restructuring needed:
+    - Create separate kit SKUs for "regalos en compra" bundles
+    - Map kit components to original individual SKUs
+    - Ensure each sale is counted only once per actual SKU
+  - **Status**: External task - modify Shopify product structure outside this project
+
+- [ ] **Issue #008**: Add wholesale order forecasting sheet and integration
+  - **Description**: Wholesale orders (not tracked in Shopify) need to be factored into days of stock calculations
+  - **Impact**: Days of stock calculations are incomplete without wholesale demand forecasting
+  - **Files**: `src/sheets_client.py`, `src/models.py`, `dashboard.py`
+  - **Solution**: 
+    - Add "Wholesale Forecast" sheet to Google Sheets template
+    - Include columns: SKU, Forecasted Quantity (30d), Order Date, Customer, Notes
+    - Modify daily sales velocity calculation to include wholesale forecasted demand
+    - Update days of stock formula: Available Stock ÷ (Shopify Daily Sales + Wholesale Daily Demand)
+    - Add wholesale forecast display in dashboard
+
 
 ### 🟡 Medium Priority Issues
 - [ ] **Issue #002**: Remove debug logging from production Shopify client
@@ -98,6 +117,29 @@ This document tracks known issues, bugs, and planned improvements for the invent
 - [x] **Issue #004**: Implemented OAuth 2.0 for Google Sheets
   - **Resolved**: 2024-01-05
   - **Solution**: Replaced service account auth with OAuth to bypass organization policies
+
+- [x] **Issue #001**: Add sales velocity (units sold last 30 days) for each product to calculate Days of Stock left and minimum buffer
+  - **Resolved**: 2024-01-05
+  - **Solution**: Implemented comprehensive sales velocity tracking with the following features:
+    - **Smart order fetching**: Uses Shopify Analytics API with fallback to orders API
+    - **Full 30-day coverage**: Fetches all orders from last 30 days (not limited to arbitrary page counts)
+    - **Intelligent caching**: 6-hour cache system to avoid repeated expensive API calls
+    - **Timezone-aware processing**: Proper UTC datetime handling for accurate date ranges
+    - **Performance optimized**: Processes up to 50,000 orders with safety limits
+    - **Dashboard integration**: Added sales velocity columns (Units Sold 30d, Daily Sales Rate, Days of Stock, Recommended Buffer)
+    - **Advanced filtering**: Filter products by days of stock remaining and sales activity
+    - **Null-safe processing**: Handles missing SKUs gracefully during order processing
+
+- [x] **Issue #009**: Add product costs and inventory value calculations
+  - **Resolved**: 2024-01-05
+  - **Solution**: Implemented comprehensive cost tracking and inventory valuation with the following features:
+    - **Product model enhancement**: Added unit_cost field and inventory value calculations
+    - **Google Sheets integration**: New "Product Costs" sheet template with columns for SKU, Unit Cost, Currency, Last Updated, Supplier, Notes
+    - **Automatic cost loading**: System loads product costs from Google Sheets and applies to inventory calculations
+    - **Dashboard financial metrics**: Added Total Inventory Value, High Value Items count, inventory value per product
+    - **Advanced filtering**: Filter by "High Value (≥$1K)" and "No Cost Data" to identify costing gaps
+    - **Visual indicators**: Color-coded inventory values (light blue for ≥$1K, darker blue for ≥$5K)
+    - **Financial insights**: Individual product inventory values displayed alongside operational metrics
 
 ## How to Report Issues
 

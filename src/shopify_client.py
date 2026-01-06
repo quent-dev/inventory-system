@@ -134,6 +134,179 @@ class ShopifyClient:
         
         return inventory_levels
     
+    def get_sales_velocity_analytics(self, days: int = 30) -> Dict[str, int]:
+        """Get sales velocity using Shopify Analytics API (efficient)."""
+        from datetime import datetime, timedelta
+        
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        print(f"📊 Fetching sales analytics for last {days} days...")
+        
+        # Try the Analytics API first
+        params = {
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d')
+        }
+        
+        # Try different analytics endpoints
+        analytics_endpoints = [
+            'analytics/reports/products.json',
+            'analytics/reports/variants.json',
+            'reports/sales_by_product_variant.json'
+        ]
+        
+        sales_by_sku = {}
+        
+        for endpoint in analytics_endpoints:
+            try:
+                response = self._make_request(endpoint, params)
+                
+                if response and 'reports' in response:
+                    reports = response['reports']
+                    print(f"   Found {len(reports)} analytics reports")
+                    
+                    for report in reports:
+                        # Different report structures possible
+                        if 'variant_sku' in report and 'quantity' in report:
+                            sku = report['variant_sku']
+                            quantity = int(report.get('quantity', 0))
+                            if sku:
+                                sales_by_sku[sku] = sales_by_sku.get(sku, 0) + quantity
+                        
+                        elif 'sku' in report and 'units_sold' in report:
+                            sku = report['sku'] 
+                            quantity = int(report.get('units_sold', 0))
+                            if sku:
+                                sales_by_sku[sku] = sales_by_sku.get(sku, 0) + quantity
+                    
+                    if sales_by_sku:
+                        print(f"   Successfully got sales data from {endpoint}")
+                        break
+                        
+            except Exception as e:
+                print(f"   Analytics endpoint {endpoint} failed: {e}")
+                continue
+        
+        # If analytics API doesn't work, fall back to recent orders (limited)
+        if not sales_by_sku:
+            print("   Analytics API unavailable, using fallback method...")
+            sales_by_sku = self._get_recent_sales_fallback(days)
+        
+        print(f"   Found sales data for {len(sales_by_sku)} SKUs")
+        return sales_by_sku
+    
+    def _get_recent_sales_fallback(self, days: int = 30) -> Dict[str, int]:
+        """Fallback method to get recent sales from orders with smart pagination."""
+        from datetime import datetime, timedelta
+        import os
+        import json
+        
+        # Check for cached data first
+        cache_file = 'sales_velocity_cache.json'
+        cache_hours = 6  # Refresh every 6 hours
+        
+        if os.path.exists(cache_file):
+            try:
+                cache_time = os.path.getmtime(cache_file)
+                hours_old = (datetime.now().timestamp() - cache_time) / 3600
+                
+                if hours_old < cache_hours:
+                    print(f"   Using cached sales data ({hours_old:.1f} hours old)")
+                    with open(cache_file, 'r') as f:
+                        return json.load(f)
+            except Exception as e:
+                print(f"   Cache read error: {e}")
+        
+        from datetime import timezone
+        
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=days)
+        
+        sales_by_sku = {}
+        total_orders_processed = 0
+        
+        # Use smarter pagination strategy
+        params = {
+            'status': 'any',
+            'created_at_min': start_date.isoformat(),
+            'limit': 250,  # Max per request
+            'fields': 'line_items,created_at,id'
+        }
+        
+        print(f"   Fetching orders from last {days} days (may take a moment)...")
+        
+        # Get all orders from the 30-day period with safety limits
+        page = 0
+        max_orders = 50000  # Safety limit to prevent infinite loops
+        
+        while total_orders_processed < max_orders:  # Safety limit + date checking
+            response = self._make_request('orders.json', params)
+            
+            if not response or 'orders' not in response:
+                break
+            
+            orders = response['orders']
+            if not orders:
+                break
+                
+            total_orders_processed += len(orders)
+            print(f"   Page {page + 1}: Processing {len(orders)} orders...")
+            
+            # Check if we've gone beyond our date range
+            oldest_order_in_batch = None
+            
+            for order in orders:
+                order_date_str = order.get('created_at', '')
+                if order_date_str:
+                    # Parse Shopify datetime (always in UTC with 'Z' suffix)
+                    order_date = datetime.fromisoformat(order_date_str.replace('Z', '+00:00'))
+                    
+                    # Stop if this order is older than our start date
+                    if order_date < start_date:
+                        print(f"   Reached orders older than {days} days, stopping...")
+                        oldest_order_in_batch = order_date
+                        break
+                    
+                    oldest_order_in_batch = order_date
+                
+                line_items = order.get('line_items', [])
+                
+                for item in line_items:
+                    # Handle None/null SKU safely
+                    sku_raw = item.get('sku')
+                    sku = sku_raw.strip() if sku_raw else ''
+                    quantity = int(item.get('quantity', 0))
+                    
+                    if sku and quantity > 0:
+                        sales_by_sku[sku] = sales_by_sku.get(sku, 0) + quantity
+            
+            # Stop if we found an order older than our date range
+            if oldest_order_in_batch and oldest_order_in_batch < start_date:
+                break
+            
+            # Setup for next page - use the last order's created_at as the new max
+            if len(orders) == 250:  # Full page, likely more data
+                last_order = orders[-1]
+                params['created_at_max'] = last_order.get('created_at')
+                page += 1
+            else:
+                # Partial page, we're done
+                break
+        
+        print(f"   Processed {total_orders_processed} orders total")
+        print(f"   Found sales data for {len(sales_by_sku)} SKUs")
+        
+        # Cache the results
+        try:
+            with open(cache_file, 'w') as f:
+                json.dump(sales_by_sku, f)
+            print(f"   Cached sales data for next {cache_hours} hours")
+        except Exception as e:
+            print(f"   Cache write error: {e}")
+        
+        return sales_by_sku
+    
     def test_connection(self) -> bool:
         """Test if the Shopify connection is working."""
         try:

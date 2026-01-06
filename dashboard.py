@@ -185,19 +185,31 @@ def display_product_inventory():
     # Create DataFrame from products
     product_data = []
     for sku, product in st.session_state.engine.products.items():
+        days_of_stock = product.days_of_stock
+        days_of_stock_display = f"{days_of_stock:.1f}" if days_of_stock else "∞"
+        
         product_data.append({
             'SKU': sku,
             'Product Name': product.name,
             'Current Stock': product.current_stock,
-            'Reserved Stock': product.reserved_stock,
             'Available Stock': product.available_stock,
+            'Units Sold (30d)': product.units_sold_30_days,
+            'Daily Sales Rate': f"{product.daily_sales_velocity:.2f}",
+            'Days of Stock': days_of_stock_display,
+            'Unit Cost': f"${product.unit_cost:.2f}",
+            'Inventory Value': f"${product.inventory_value:.2f}",
+            'Recommended Buffer': product.recommended_buffer,
             'Last Updated': product.last_updated.strftime('%Y-%m-%d %H:%M') if product.last_updated else 'Unknown'
         })
     
     df = pd.DataFrame(product_data)
     
+    # Calculate total inventory value
+    total_inventory_value = sum(product.inventory_value for product in st.session_state.engine.products.values())
+    high_value_products = len(df[df['Inventory Value'].str.replace('$', '').astype(float) >= 1000])
+    
     # Display summary metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
         st.metric("Total Products", len(df))
@@ -207,12 +219,19 @@ def display_product_inventory():
         st.metric("Total Stock Units", f"{total_stock:,}")
     
     with col3:
+        st.metric("Total Inventory Value", f"${total_inventory_value:,.2f}")
+    
+    with col4:
         out_of_stock = len(df[df['Available Stock'] <= 0])
         st.metric("Out of Stock", out_of_stock)
     
-    with col4:
-        low_stock = len(df[(df['Available Stock'] > 0) & (df['Available Stock'] <= 5)])
-        st.metric("Low Stock (≤5)", low_stock)
+    with col5:
+        # Products with less than 30 days of stock
+        low_days = len(df[(df['Days of Stock'] != "∞") & (df['Days of Stock'].astype(str).str.replace('∞', '999').astype(float) < 30)])
+        st.metric("< 30 Days Stock", low_days)
+    
+    with col6:
+        st.metric("High Value Items (≥$1K)", high_value_products)
     
     # Search and filter options
     col1, col2 = st.columns([2, 1])
@@ -222,7 +241,7 @@ def display_product_inventory():
     
     with col2:
         stock_filter = st.selectbox("Filter by stock level:", 
-                                   ["All", "In Stock", "Out of Stock", "Low Stock (≤5)"])
+                                   ["All", "In Stock", "Out of Stock", "Low Stock (≤5)", "< 30 Days Stock", "With Sales Activity", "High Value (≥$1K)", "No Cost Data"])
     
     # Apply filters
     filtered_df = df.copy()
@@ -240,8 +259,16 @@ def display_product_inventory():
         filtered_df = filtered_df[filtered_df['Available Stock'] <= 0]
     elif stock_filter == "Low Stock (≤5)":
         filtered_df = filtered_df[(filtered_df['Available Stock'] > 0) & (filtered_df['Available Stock'] <= 5)]
+    elif stock_filter == "< 30 Days Stock":
+        filtered_df = filtered_df[(filtered_df['Days of Stock'] != "∞") & (filtered_df['Days of Stock'].astype(str).str.replace('∞', '999').astype(float) < 30)]
+    elif stock_filter == "With Sales Activity":
+        filtered_df = filtered_df[filtered_df['Units Sold (30d)'] > 0]
+    elif stock_filter == "High Value (≥$1K)":
+        filtered_df = filtered_df[filtered_df['Inventory Value'].str.replace('$', '').astype(float) >= 1000]
+    elif stock_filter == "No Cost Data":
+        filtered_df = filtered_df[filtered_df['Unit Cost'] == "$0.00"]
     
-    # Color coding function
+    # Color coding functions
     def color_stock_levels(val):
         if val <= 0:
             return 'background-color: #ffcccb'  # Red for out of stock
@@ -250,14 +277,30 @@ def display_product_inventory():
         else:
             return 'background-color: #d4edda'  # Green for good stock
     
+    def color_inventory_value(val):
+        # Extract numeric value from "$X.XX" format
+        try:
+            numeric_val = float(val.replace('$', '').replace(',', ''))
+            if numeric_val >= 5000:
+                return 'background-color: #e6f3ff'  # Light blue for very high value
+            elif numeric_val >= 1000:
+                return 'background-color: #f0f8ff'  # Lighter blue for high value
+            else:
+                return ''  # No color for lower values
+        except:
+            return ''
+    
     # Display filtered table
     if len(filtered_df) > 0:
         st.write(f"Showing {len(filtered_df)} of {len(df)} products")
         
-        # Apply styling to Available Stock column
+        # Apply styling to both Available Stock and Inventory Value columns
         styled_df = filtered_df.style.applymap(
             color_stock_levels, 
             subset=['Available Stock']
+        ).applymap(
+            color_inventory_value,
+            subset=['Inventory Value']
         )
         
         st.dataframe(styled_df, use_container_width=True)

@@ -20,6 +20,19 @@ class InventoryEngine:
             products_list = self.shopify_client.get_products()
             self.products = {p.sku: p for p in products_list}
             
+            # Load sales velocity data
+            sales_data = self.shopify_client.get_sales_velocity_analytics(30)
+            
+            # Load product costs
+            costs_data = self.sheets_client.get_product_costs()
+            
+            # Update products with sales velocity and costs
+            for sku, product in self.products.items():
+                units_sold = sales_data.get(sku, 0)
+                product.units_sold_30_days = units_sold
+                product.daily_sales_velocity = units_sold / 30.0  # Average daily sales
+                product.unit_cost = costs_data.get(sku, 0.0)  # Default to 0 if no cost data
+            
             # Load kits from Google Sheets
             kits_list = self.sheets_client.get_kit_master_data()
             components_by_kit = self.sheets_client.get_kit_components()

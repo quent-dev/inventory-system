@@ -10,10 +10,38 @@ class Product:
     current_stock: int
     reserved_stock: int = 0
     last_updated: Optional[datetime] = None
+    units_sold_30_days: int = 0
+    daily_sales_velocity: float = 0.0
+    unit_cost: float = 0.0
     
     @property
     def available_stock(self) -> int:
         return max(0, self.current_stock - self.reserved_stock)
+    
+    @property
+    def days_of_stock(self) -> Optional[float]:
+        """Calculate days of stock remaining based on sales velocity."""
+        if self.daily_sales_velocity <= 0:
+            return None  # No sales data or no sales
+        return self.available_stock / self.daily_sales_velocity
+    
+    @property
+    def recommended_buffer(self) -> int:
+        """Calculate recommended minimum buffer based on sales velocity."""
+        if self.daily_sales_velocity <= 0:
+            return 0
+        # Recommend 7 days worth of inventory as buffer
+        return int(self.daily_sales_velocity * 7)
+    
+    @property
+    def inventory_value(self) -> float:
+        """Calculate total inventory value (available stock × unit cost)."""
+        return self.available_stock * self.unit_cost
+    
+    @property
+    def total_inventory_value(self) -> float:
+        """Calculate total inventory value including reserved stock."""
+        return self.current_stock * self.unit_cost
 
 
 @dataclass
