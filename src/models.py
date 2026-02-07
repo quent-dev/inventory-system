@@ -64,6 +64,16 @@ class Kit:
     is_active: bool = True
     created_date: Optional[datetime] = None
     last_modified: Optional[datetime] = None
+    
+    def calculate_cost_from_components(self, component_costs: Dict[str, float]) -> float:
+        """Calculate total kit cost from component costs."""
+        total_cost = 0.0
+        
+        for component in self.components:
+            component_cost = component_costs.get(component.component_sku, 0.0)
+            total_cost += component_cost * component.quantity_per_kit
+        
+        return total_cost
 
 
 @dataclass

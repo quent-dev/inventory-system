@@ -2,13 +2,25 @@ from typing import List, Dict, Tuple
 from .models import Product, Kit, KitComponent, BusinessRule, EffectiveInventory
 from .shopify_client import ShopifyClient
 from .sheets_client import GoogleSheetsClient
+from .store_config import get_store_config, DEFAULT_STORE
 import math
 
 
 class InventoryEngine:
-    def __init__(self):
-        self.shopify_client = ShopifyClient()
-        self.sheets_client = GoogleSheetsClient()
+    def __init__(self, store_id: str = None):
+        """
+        Initialize the inventory engine for a specific store.
+
+        Args:
+            store_id: Store identifier (e.g., "mexico", "usa").
+                      Defaults to DEFAULT_STORE if not specified.
+        """
+        self.store_id = store_id or DEFAULT_STORE
+        store_config = get_store_config(self.store_id)
+        self.store_display_name = store_config.display_name
+
+        self.shopify_client = ShopifyClient(store_id=self.store_id)
+        self.sheets_client = GoogleSheetsClient(store_id=self.store_id)
         self.products = {}  # SKU -> Product
         self.kits = {}  # Kit SKU -> Kit
         self.business_rules = {}  # Component SKU -> BusinessRule
@@ -168,9 +180,15 @@ class InventoryEngine:
         
         return issues
     
+    def clear_sales_cache(self) -> bool:
+        """Clear cached sales data to force recalculation."""
+        return self.shopify_client.clear_sales_cache()
+
     def get_system_status(self) -> Dict:
         """Get overall system status and health."""
         return {
+            'store_id': self.store_id,
+            'store_display_name': self.store_display_name,
             'shopify_connected': self.shopify_client.test_connection(),
             'sheets_connected': self.sheets_client.test_connection(),
             'products_loaded': len(self.products),

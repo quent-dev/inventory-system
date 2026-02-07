@@ -29,20 +29,31 @@ This document tracks known issues, bugs, and planned improvements for the invent
 
 
 ### 🟡 Medium Priority Issues
-- [ ] **Issue #002**: Remove debug logging from production Shopify client
-  - **Description**: Shopify API calls currently print detailed product/variant information to console
-  - **Impact**: Performance and clean output in production
-  - **Files**: `src/shopify_client.py`
-  - **Solution**: Add DEBUG environment variable to control verbose logging
-
-- [ ] **Issue #003**: Improve error handling for Google Sheets authentication
+- [ ] **Issue #011**: Improve error handling for Google Sheets authentication
   - **Description**: OAuth flow could provide better error messages for common failures
   - **Impact**: User experience during setup
   - **Files**: `src/sheets_client.py`
   - **Solution**: Add specific error handling for common OAuth issues
 
+- [ ] **Issue #013**: Add Google Sheets link to dashboard System Status
+  - **Description**: Dashboard doesn't show a direct link to the Google Sheets document
+  - **Impact**: User experience - users need to manually find their spreadsheet
+  - **Files**: `dashboard.py`
+  - **Solution**: Add clickable link to Google Sheets in System Status tab using the GOOGLE_SPREADSHEET_ID
+
+- [ ] **Issue #014**: Add data completeness recap in dashboard
+  - **Description**: No visibility into what data is missing or incomplete in Google Sheets
+  - **Impact**: Users don't know what to update in their sheets (missing components, empty costs, etc.)
+  - **Files**: `dashboard.py`, `src/inventory_engine.py`
+  - **Solution**: Add a "Data Completeness" section showing:
+    - Kits without component mappings
+    - Components referenced but not in Shopify
+    - Products missing cost data
+    - Components missing business rules
+    - Empty/invalid numeric fields
+
 ### 🟢 Low Priority Issues
-- [ ] **Issue #004**: Add pagination for large product catalogs
+- [ ] **Issue #012**: Add pagination for large product catalogs
   - **Description**: Shopify API only returns 250 products per request
   - **Impact**: Won't load all products for stores with >250 SKUs
   - **Files**: `src/shopify_client.py`
@@ -141,6 +152,15 @@ This document tracks known issues, bugs, and planned improvements for the invent
     - **Visual indicators**: Color-coded inventory values (light blue for ≥$1K, darker blue for ≥$5K)
     - **Financial insights**: Individual product inventory values displayed alongside operational metrics
 
+- [x] **Issue #010**: Remove debug logging from production Shopify client
+  - **Resolved**: 2026-01-11
+  - **Solution**: Added DEBUG environment variable to control verbose logging:
+    - **Debug flag**: Added `self.debug` flag that reads from `DEBUG` environment variable
+    - **Conditional logging**: All verbose print statements now wrapped in `if self.debug:` checks
+    - **Production ready**: Clean output in production, detailed logging available when DEBUG=true
+    - **Coverage**: Applied to all methods including product fetching, sales velocity, order processing, and caching
+    - **Usage**: Set `DEBUG=true` or `DEBUG=1` environment variable to enable verbose logging
+
 ## How to Report Issues
 
 1. **Create a new issue entry** in the appropriate section above
@@ -169,4 +189,4 @@ When working on fixes:
 
 ---
 
-*Last updated: 2024-01-05*
+*Last updated: 2026-01-12*

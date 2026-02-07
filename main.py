@@ -3,6 +3,7 @@
 Inventory Management System - Main Entry Point
 """
 
+import argparse
 import os
 import sys
 from dotenv import load_dotenv
@@ -11,25 +12,91 @@ from dotenv import load_dotenv
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 from src.inventory_engine import InventoryEngine
+from src.store_config import get_available_stores, get_all_stores, SUPPORTED_STORES, DEFAULT_STORE
+
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Inventory Management System - Multi-Store Support",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python main.py                  # Run with default store (Mexico)
+  python main.py --store mexico   # Explicit Mexico store
+  python main.py --store usa      # USA store
+  python main.py --list-stores    # Show available stores
+        """
+    )
+
+    parser.add_argument(
+        '--store',
+        type=str,
+        choices=list(SUPPORTED_STORES.keys()),
+        default=DEFAULT_STORE,
+        help=f"Store to connect to (default: {DEFAULT_STORE})"
+    )
+
+    parser.add_argument(
+        '--list-stores',
+        action='store_true',
+        help="List all available stores and their configuration status"
+    )
+
+    return parser.parse_args()
+
+
+def list_stores():
+    """Display available stores and their configuration status."""
+    print("🏪 Supported Stores:")
+    print("-" * 40)
+
+    all_stores = get_all_stores()
+    available_stores = get_available_stores()
+
+    for store_id, display_name in all_stores.items():
+        if store_id in available_stores:
+            status = "✅ Configured"
+        else:
+            status = "❌ Not configured"
+        default_marker = " (default)" if store_id == DEFAULT_STORE else ""
+        print(f"  {store_id}: {display_name} - {status}{default_marker}")
+
+    print()
+    print("To configure a store, set the following environment variables:")
+    for store_id, info in SUPPORTED_STORES.items():
+        suffix = info["env_suffix"]
+        print(f"  {store_id}: SHOPIFY_SHOP_DOMAIN{suffix}, SHOPIFY_ACCESS_TOKEN{suffix}")
 
 
 def main():
     """Main function for CLI testing and debugging."""
+    args = parse_args()
+
+    # Handle --list-stores
+    if args.list_stores:
+        load_dotenv()
+        list_stores()
+        return
+
+    store_id = args.store
+
     print("🚀 Inventory Management System")
     print("=" * 40)
-    
+
     # Load environment variables
     load_dotenv()
-    
+
     try:
-        # Initialize the inventory engine
-        print("Initializing inventory engine...")
-        engine = InventoryEngine()
+        # Initialize the inventory engine for the selected store
+        print(f"Initializing inventory engine for {store_id.upper()} store...")
+        engine = InventoryEngine(store_id=store_id)
         
         # Test connections
         print("\n📡 Testing connections...")
         status = engine.get_system_status()
         
+        print(f"Store: {status['store_display_name']} ({status['store_id']})")
         print(f"Shopify: {'✅ Connected' if status['shopify_connected'] else '❌ Failed'}")
         print(f"Google Sheets: {'✅ Connected' if status['sheets_connected'] else '❌ Failed'}")
         
@@ -40,8 +107,10 @@ def main():
         # Load data
         print("\n📊 Loading data...")
         success = engine.load_data()
-        
+
         if success:
+            # Get updated status after loading
+            status = engine.get_system_status()
             print(f"✅ Loaded {status['products_loaded']} products and {status['kits_loaded']} kits")
             
             # Debug: Show summary and check for specific SKUs
