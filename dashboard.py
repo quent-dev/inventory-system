@@ -314,7 +314,7 @@ def display_product_inventory():
             'Last Updated': st.column_config.TextColumn('Last Updated'),
         }
 
-        st.dataframe(display_df, column_config=column_config, use_container_width=True)
+        st.dataframe(display_df, column_config=column_config, width='stretch')
         
         # Download option
         csv = filtered_df.to_csv(index=False)
@@ -400,43 +400,6 @@ def main():
 
         if st.session_state.last_refresh:
             st.write(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}")
-
-        st.divider()
-
-        # Environment check - show store-specific variables
-        st.subheader("Environment Check")
-        store_info = SUPPORTED_STORES.get(st.session_state.current_store, {})
-        env_suffix = store_info.get('env_suffix', '')
-
-        # Check store-specific Shopify vars (with legacy fallback for Mexico)
-        shopify_domain_var = f'SHOPIFY_SHOP_DOMAIN{env_suffix}'
-        shopify_token_var = f'SHOPIFY_ACCESS_TOKEN{env_suffix}'
-
-        # For Mexico, also check legacy vars
-        if st.session_state.current_store == "mexico":
-            shopify_domain_configured = os.getenv(shopify_domain_var) or os.getenv('SHOPIFY_SHOP_DOMAIN')
-            shopify_token_configured = os.getenv(shopify_token_var) or os.getenv('SHOPIFY_ACCESS_TOKEN')
-        else:
-            shopify_domain_configured = os.getenv(shopify_domain_var)
-            shopify_token_configured = os.getenv(shopify_token_var)
-
-        if shopify_domain_configured:
-            st.success(f"✅ {shopify_domain_var}")
-        else:
-            st.error(f"❌ {shopify_domain_var}")
-
-        if shopify_token_configured:
-            st.success(f"✅ {shopify_token_var}")
-        else:
-            st.error(f"❌ {shopify_token_var}")
-
-        # Common vars (not store-specific)
-        common_vars = ['GOOGLE_SPREADSHEET_ID', 'GOOGLE_OAUTH_CREDENTIALS_PATH']
-        for var in common_vars:
-            if os.getenv(var):
-                st.success(f"✅ {var}")
-            else:
-                st.error(f"❌ {var}")
 
         st.divider()
         st.subheader("Quick Links")
