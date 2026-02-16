@@ -295,6 +295,19 @@ class GoogleSheetsClient:
             print(f"Error calculating kit costs: {e}")
             return manual_costs
     
+    def get_ignored_skus(self) -> set:
+        """Read SKUs to ignore from the missing-cost-data validation check."""
+        if not self.spreadsheet:
+            return set()
+        try:
+            worksheet_name = self._get_worksheet_name('SKU Ignore List')
+            worksheet = self.spreadsheet.worksheet(worksheet_name)
+            records = worksheet.get_all_records()
+            return {record['SKU'] for record in records if record.get('SKU')}
+        except Exception as e:
+            print(f"Warning: Could not read SKU Ignore List: {e}")
+            return set()
+
     def create_sample_sheets(self):
         """Create sample sheets with headers if they don't exist."""
         if not self.spreadsheet:
@@ -345,6 +358,14 @@ class GoogleSheetsClient:
                     'SKU', 'Unit Cost', 'Cost Currency', 'Last Updated',
                     'Supplier', 'Notes', 'Manual Override (Y/N)'
                 ])
+
+            # SKU Ignore List sheet
+            sku_ignore_name = self._get_worksheet_name('SKU Ignore List')
+            try:
+                self.spreadsheet.worksheet(sku_ignore_name)
+            except:
+                sku_ignore = self.spreadsheet.add_worksheet(sku_ignore_name, 200, 2)
+                sku_ignore.append_row(['SKU', 'Reason'])
 
             return True
 

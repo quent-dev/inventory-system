@@ -24,6 +24,7 @@ class InventoryEngine:
         self.products = {}  # SKU -> Product
         self.kits = {}  # Kit SKU -> Kit
         self.business_rules = {}  # Component SKU -> BusinessRule
+        self.costs_data = {}  # SKU -> unit cost from Product Costs sheet
         
     def load_data(self) -> bool:
         """Load all data from Shopify and Google Sheets."""
@@ -36,14 +37,14 @@ class InventoryEngine:
             sales_data = self.shopify_client.get_sales_velocity_analytics(30)
             
             # Load product costs
-            costs_data = self.sheets_client.get_product_costs()
+            self.costs_data = self.sheets_client.get_product_costs()
             
             # Update products with sales velocity and costs
             for sku, product in self.products.items():
                 units_sold = sales_data.get(sku, 0)
                 product.units_sold_30_days = units_sold
                 product.daily_sales_velocity = units_sold / 30.0  # Average daily sales
-                product.unit_cost = costs_data.get(sku, 0.0)  # Default to 0 if no cost data
+                product.unit_cost = self.costs_data.get(sku, 0.0)  # Default to 0 if no cost data
             
             # Load kits from Google Sheets
             kits_list = self.sheets_client.get_kit_master_data()
@@ -177,7 +178,13 @@ class InventoryEngine:
         for sku in self.business_rules.keys():
             if sku not in self.products:
                 issues.append(f"Business rule exists for non-existent component: {sku}")
-        
+
+        # Check for Shopify SKUs missing from Product Costs sheet
+        ignored_skus = self.sheets_client.get_ignored_skus()
+        for sku in self.products:
+            if sku not in self.costs_data and sku not in ignored_skus:
+                issues.append(f"Shopify SKU {sku} has no cost data in Product Costs sheet")
+
         return issues
     
     def clear_sales_cache(self) -> bool:
