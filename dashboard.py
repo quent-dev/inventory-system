@@ -197,6 +197,7 @@ def display_product_inventory():
 
         product_data.append({
             'SKU': sku,
+            'Kit': sku in st.session_state.engine.kits,
             'Product Name': product.name,
             'Current Stock': product.current_stock,
             'Available Stock': product.available_stock,
@@ -247,8 +248,8 @@ def display_product_inventory():
         search_term = st.text_input("🔍 Search products by SKU or name:", placeholder="Enter SKU or product name...")
     
     with col2:
-        stock_filter = st.selectbox("Filter by stock level:", 
-                                   ["All", "In Stock", "Out of Stock", "Low Stock (≤5)", "< 30 Days Stock", "With Sales Activity", "High Value (≥$1K)", "No Cost Data"])
+        stock_filter = st.selectbox("Filter by stock level:",
+                                   ["All", "In Stock", "Out of Stock", "Low Stock (≤5)", "< 30 Days Stock", "With Sales Activity", "High Value (≥$1K)", "No Cost Data", "Kits"])
     
     # Apply filters
     filtered_df = df.copy()
@@ -274,6 +275,8 @@ def display_product_inventory():
         filtered_df = filtered_df[filtered_df['Inventory Value'] >= 1000]
     elif stock_filter == "No Cost Data":
         filtered_df = filtered_df[filtered_df['Unit Cost'] == 0]
+    elif stock_filter == "Kits":
+        filtered_df = filtered_df[filtered_df['Kit'] == True]
     
     # Color coding functions
     def color_stock_levels(val):
@@ -302,6 +305,7 @@ def display_product_inventory():
         # Column configuration for proper formatting while keeping numeric sorting
         column_config = {
             'SKU': st.column_config.TextColumn('SKU'),
+            'Kit': st.column_config.CheckboxColumn('Kit'),
             'Product Name': st.column_config.TextColumn('Product Name'),
             'Current Stock': st.column_config.NumberColumn('Current Stock', format='%d'),
             'Available Stock': st.column_config.NumberColumn('Available Stock', format='%d'),
